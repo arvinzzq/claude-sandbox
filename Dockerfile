@@ -1,16 +1,16 @@
 FROM mcr.microsoft.com/playwright:v1.47.2-jammy
 
-# 升级 npm 并安装 Claude Code CLI
+# Upgrade npm and install Claude Code CLI
 RUN npm i -g npm@latest && \
     npm i -g @anthropic-ai/claude-code@latest
 
-# 创建非 root 用户，降低风险
+# Create non-root user to reduce risk
 RUN useradd -m dev && mkdir -p /workspace && chown -R dev:dev /workspace
 USER dev
 WORKDIR /workspace
 
-# 基础镜像已包含浏览器，跳过安装
+# Base image already contains browsers, skip installation
 
-# 环境优化
+# Environment optimization
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 ENV PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=1

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# 用法：
-#   ./claude-in-docker                 # 进入容器 shell（/workspace）
-#   ./claude-in-docker --code          # 启动 Claude Code（安全模式）
-#   ./claude-in-docker --code --dangerous  # 启动 Claude Code（危险模式）
+# Usage:
+#   ./claude-in-docker                 # Enter container shell (/workspace)
+#   ./claude-in-docker --code          # Start Claude Code (safe mode)
+#   ./claude-in-docker --code --dangerous  # Start Claude Code (dangerous mode)
 set -euo pipefail
 
 IMAGE_NAME="claudecode-playwright:latest"
@@ -11,7 +11,7 @@ WORKDIR_IN_CONTAINER="/workspace"
 
 HOST_WORKDIR="${PWD}"
 
-# 与安装脚本保持一致：优先使用项目内 .sandbox（若存在）
+# Consistent with install script: prefer project-local .sandbox (if exists)
 if [[ -f ".sandbox/config/.claude.json" ]]; then
   CLAUDE_CFG_HOST="${HOST_WORKDIR}/.sandbox/config/.claude.json"
   MS_PW_CACHE_HOST="${HOST_WORKDIR}/.sandbox/ms-playwright"
@@ -34,7 +34,7 @@ for arg in "$@"; do
   case "$arg" in
     --code) MODE_SHELL=0; RUN_CODE=1 ;;
     --dangerous) ENABLE_DANGEROUS=1 ;;
-    *) echo "未知参数：$arg"; echo "用法: $0 [--code] [--dangerous]"; exit 1 ;;
+    *) echo "Unknown argument: $arg"; echo "Usage: $0 [--code] [--dangerous]"; exit 1 ;;
   done
 done
 

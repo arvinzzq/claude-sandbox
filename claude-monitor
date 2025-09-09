@@ -29,18 +29,18 @@ check_session_status() {
         return
     fi
     
-    # 检查进程是否存在
+    # Check if process exists
     local pane_pid=$(tmux list-panes -t "$session" -F '#{pane_pid}' 2>/dev/null | head -1)
     if [[ -z "$pane_pid" ]] || ! kill -0 "$pane_pid" 2>/dev/null; then
         echo "💀 Process dead"
         return
     fi
     
-    # 获取最后几行输出
+    # Get last few lines of output
     local last_lines=$(tmux capture-pane -t "$session" -p 2>/dev/null | tail -3 | tr '\n' ' ')
     local last_line=$(echo "$last_lines" | tail -1)
     
-    # 分析状态
+    # Analyze status
     if [[ "$last_lines" == *">"* ]] || [[ "$last_lines" == *"\$"* ]]; then
         echo "✅ Waiting for input"
     elif [[ "$last_lines" == *"Error"* ]] || [[ "$last_lines" == *"error"* ]] || [[ "$last_lines" == *"Failed"* ]]; then
@@ -100,8 +100,8 @@ start_new_instance() {
     clear
     echo "Starting new Claude Code instance..."
     echo "Available options:"
-    echo "1) claude code (安全模式)"
-    echo "2) claude code --dangerous (危险模式)"
+    echo "1) claude code (safe mode)"
+    echo "2) claude code --dangerous (dangerous mode)"
     echo "3) Custom command"
     echo
     read -p "Please select [1-3]: " choice
@@ -263,7 +263,7 @@ check_dependencies() {
 main() {
     check_dependencies
     
-    # 处理命令行参数
+    # Handle command line arguments
     case "${1:-}" in
         --help|-h)
             show_help
