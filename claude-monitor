@@ -1,0 +1,289 @@
+#!/usr/bin/env bash
+# claude-monitor - Claude Code Instance Monitor
+set -euo pipefail
+
+# Configuration
+SESSIONS=("claude1" "claude2" "claude3")
+REFRESH_INTERVAL=3
+
+# Color definitions
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+# Get terminal size
+get_terminal_size() {
+    ROWS=$(tput lines)
+    COLS=$(tput cols)
+}
+
+# Check session status
+check_session_status() {
+    local session=$1
+    
+    if ! tmux has-session -t "$session" 2>/dev/null; then
+        echo "❌ Session not found"
+        return
+    fi
+    
+    # 检查进程是否存在
+    local pane_pid=$(tmux list-panes -t "$session" -F '#{pane_pid}' 2>/dev/null | head -1)
+    if [[ -z "$pane_pid" ]] || ! kill -0 "$pane_pid" 2>/dev/null; then
+        echo "💀 Process dead"
+        return
+    fi
+    
+    # 获取最后几行输出
+    local last_lines=$(tmux capture-pane -t "$session" -p 2>/dev/null | tail -3 | tr '\n' ' ')
+    local last_line=$(echo "$last_lines" | tail -1)
+    
+    # 分析状态
+    if [[ "$last_lines" == *">"* ]] || [[ "$last_lines" == *"\$"* ]]; then
+        echo "✅ Waiting for input"
+    elif [[ "$last_lines" == *"Error"* ]] || [[ "$last_lines" == *"error"* ]] || [[ "$last_lines" == *"Failed"* ]]; then
+        echo "⚠️ Error occurred"
+    elif [[ "$last_lines" == *"thinking"* ]] || [[ "$last_lines" == *"processing"* ]] || [[ "$last_lines" == *"..."* ]]; then
+        echo "🤔 Processing"
+    elif [[ "$last_lines" == *"claude"* ]] && [[ "$last_lines" == *"code"* ]]; then
+        echo "🚀 Starting up"
+    elif [[ -n "$last_line" ]] && [[ "$last_line" != *"^"* ]]; then
+        echo "📝 Active"
+    else
+        echo "❓ Status unknown"
+    fi
+}
+
+# Get last activity time
+get_last_activity() {
+    local session=$1
+    if tmux has-session -t "$session" 2>/dev/null; then
+        local activity=$(tmux display-message -t "$session" -p '#{session_activity}' 2>/dev/null || echo "0")
+        if [[ "$activity" != "0" ]]; then
+            local current=$(date +%s)
+            local diff=$((current - activity))
+            if [[ $diff -lt 60 ]]; then
+                echo "${diff}s ago"
+            elif [[ $diff -lt 3600 ]]; then
+                echo "$((diff/60))m ago"
+            else
+                echo "$((diff/3600))h ago"
+            fi
+        else
+            echo "Unknown"
+        fi
+    else
+        echo "N/A"
+    fi
+}
+
+# Show help information
+show_help() {
+    cat <<EOF
+Claude Code Monitor Controls:
+
+Number keys [1-9]: Enter corresponding Claude instance
+r: Restart all instances
+k: Kill all instances  
+s: Start new instance
+l: View instance logs
+h: Show this help
+q: Exit monitor
+
+EOF
+}
+
+# Start new instance
+start_new_instance() {
+    clear
+    echo "Starting new Claude Code instance..."
+    echo "Available options:"
+    echo "1) claude code (安全模式)"
+    echo "2) claude code --dangerous (危险模式)"
+    echo "3) Custom command"
+    echo
+    read -p "Please select [1-3]: " choice
+    
+    local next_num=1
+    for i in {1..10}; do
+        if ! tmux has-session -t "claude$i" 2>/dev/null; then
+            next_num=$i
+            break
+        fi
+    done
+    
+    local cmd=""
+    case $choice in
+        1) cmd="claude code" ;;
+        2) cmd="claude code --dangerous" ;;
+        3) read -p "Please enter command: " cmd ;;
+        *) echo "Invalid selection"; sleep 2; return ;;
+    esac
+    
+    tmux new-session -d -s "claude$next_num" "$cmd"
+    SESSIONS+=("claude$next_num")
+    echo "Started instance: claude$next_num"
+    sleep 2
+}
+
+# Restart all instances
+restart_all_instances() {
+    clear
+    echo "Restarting all Claude Code instances..."
+    for session in "${SESSIONS[@]}"; do
+        if tmux has-session -t "$session" 2>/dev/null; then
+            echo "Restarting $session..."
+            tmux kill-session -t "$session" 2>/dev/null || true
+            sleep 1
+            tmux new-session -d -s "$session" 'claude code'
+        fi
+    done
+    echo "All instances restarted"
+    sleep 2
+}
+
+# Kill all instances
+kill_all_instances() {
+    clear
+    read -p "Confirm kill all Claude instances? [y/N]: " confirm
+    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+        for session in "${SESSIONS[@]}"; do
+            tmux kill-session -t "$session" 2>/dev/null || true
+        done
+        echo "All instances killed"
+    fi
+    sleep 2
+}
+
+# Show instance logs
+show_instance_log() {
+    clear
+    echo "Select instance to view logs:"
+    local i=1
+    for session in "${SESSIONS[@]}"; do
+        echo "$i) $session"
+        ((i++))
+    done
+    echo
+    read -p "Please select [1-${#SESSIONS[@]}]: " choice
+    
+    if [[ "$choice" =~ ^[0-9]+$ ]] && [[ $choice -ge 1 ]] && [[ $choice -le ${#SESSIONS[@]} ]]; then
+        local session="${SESSIONS[$((choice-1))]}"
+        if tmux has-session -t "$session" 2>/dev/null; then
+            clear
+            echo "=== $session Last 50 Lines ==="
+            tmux capture-pane -t "$session" -p | tail -50
+            echo
+            read -p "Press Enter to continue..."
+        else
+            echo "Session $session does not exist"
+            sleep 2
+        fi
+    fi
+}
+
+# Main monitoring loop
+main_monitor() {
+    while true; do
+        get_terminal_size
+        clear
+        
+        # Title
+        echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
+        echo -e "${CYAN} Claude Code Instance Monitor - $(date '+%Y-%m-%d %H:%M:%S')${NC}"
+        echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
+        echo
+        
+        # Display all instance statuses
+        local i=1
+        for session in "${SESSIONS[@]}"; do
+            local status=$(check_session_status "$session")
+            local activity=$(get_last_activity "$session")
+            
+            # Choose color based on status
+            local color=$NC
+            case "$status" in
+                *"✅"*) color=$GREEN ;;
+                *"🤔"*|*"📝"*|*"🚀"*) color=$YELLOW ;;
+                *"⚠️"*|*"❌"*|*"💀"*) color=$RED ;;
+                *) color=$BLUE ;;
+            esac
+            
+            printf "${color}[%d] %-8s: %-12s (Last activity: %s)${NC}\n" "$i" "$session" "$status" "$activity"
+            ((i++))
+        done
+        
+        echo
+        echo -e "${CYAN}────────────────────────────────────────────────────────${NC}"
+        echo "Controls: [1-9]Enter instance [r]Restart [k]Kill [s]New [l]Logs [h]Help [q]Quit"
+        echo -e "${CYAN}────────────────────────────────────────────────────────${NC}"
+        
+        # Wait for user input (with timeout)
+        if read -t $REFRESH_INTERVAL -n 1 input 2>/dev/null; then
+            case "$input" in
+                [1-9])
+                    local idx=$((input-1))
+                    if [[ $idx -lt ${#SESSIONS[@]} ]]; then
+                        local session="${SESSIONS[$idx]}"
+                        if tmux has-session -t "$session" 2>/dev/null; then
+                            clear
+                            echo "Entering $session instance..."
+                            echo "Use Ctrl+B, D to return to monitor"
+                            sleep 2
+                            tmux attach-session -t "$session"
+                        else
+                            echo "Session $session does not exist"
+                            sleep 2
+                        fi
+                    fi
+                    ;;
+                r) restart_all_instances ;;
+                k) kill_all_instances ;;
+                s) start_new_instance ;;
+                l) show_instance_log ;;
+                h) clear; show_help; read -p "Press Enter to continue..." ;;
+                q) clear; echo "Exiting monitor"; exit 0 ;;
+            esac
+        fi
+    done
+}
+
+# Initialization check
+check_dependencies() {
+    if ! command -v tmux >/dev/null 2>&1; then
+        echo "Error: tmux is required"
+        echo "Run in container: apt-get update && apt-get install -y tmux"
+        exit 1
+    fi
+}
+
+# Main function
+main() {
+    check_dependencies
+    
+    # 处理命令行参数
+    case "${1:-}" in
+        --help|-h)
+            show_help
+            exit 0
+            ;;
+        --start)
+            # Quick start mode
+            for i in {1..3}; do
+                if ! tmux has-session -t "claude$i" 2>/dev/null; then
+                    tmux new-session -d -s "claude$i" 'claude code'
+                    echo "Started claude$i"
+                fi
+            done
+            exit 0
+            ;;
+    esac
+    
+    # Start monitor
+    trap 'clear; echo "Monitor stopped"; exit 0' INT TERM
+    main_monitor
+}
+
+main "$@"
