@@ -35,7 +35,7 @@ for arg in "$@"; do
     --code) MODE_SHELL=0; RUN_CODE=1 ;;
     --dangerous) ENABLE_DANGEROUS=1 ;;
     *) echo "Unknown argument: $arg"; echo "Usage: $0 [--code] [--dangerous]"; exit 1 ;;
-  done
+  esac
 done
 
 RUN_ARGS=(docker run -it --rm

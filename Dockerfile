@@ -1,5 +1,12 @@
 FROM mcr.microsoft.com/playwright:v1.47.2-jammy
 
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    tmux \
+    vim \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
 # Upgrade npm and install Claude Code CLI
 RUN npm i -g npm@latest && \
     npm i -g @anthropic-ai/claude-code@latest

@@ -168,6 +168,113 @@ The `claude-monitor` script provides a real-time dashboard:
 - **Environment isolation**: Docker container separation
 - **Gitignore protection**: Sensitive files excluded from version control
 
+## Container Management
+
+### Stopping Docker Processes
+
+#### Exit from Container
+```bash
+# If inside container shell
+exit
+
+# If in tmux session
+Ctrl+B, D  # Detach from tmux session
+exit       # Exit container
+```
+
+#### Stop from Host Machine
+```bash
+# View running containers
+docker ps
+
+# Stop specific container
+docker stop claudecode-sandbox
+
+# Force kill container
+docker kill claudecode-sandbox
+
+# Stop all running containers
+docker stop $(docker ps -q)
+```
+
+#### Cleanup Resources
+```bash
+# Remove stopped containers
+docker rm claudecode-sandbox
+
+# Clean up all stopped containers
+docker container prune
+
+# Clean up system resources (images, networks, etc.)
+docker system prune
+```
+
+### Managing Multiple Instances
+
+#### View Running Containers
+```bash
+# Show all running containers
+docker ps
+
+# Show containers with specific name pattern
+docker ps | grep claudecode
+```
+
+#### Access Running Container
+```bash
+# Enter running container
+docker exec -it claudecode-sandbox bash
+
+# If multiple containers, use container ID
+docker exec -it <container_id> bash
+```
+
+#### Stop Specific Instances
+```bash
+# Multiple instances have different names
+docker stop claudecode-sandbox
+docker stop claudecode-sandbox-2
+docker stop claudecode-sandbox-3
+```
+
+### Monitor Script Controls
+
+#### claude-monitor Management
+```bash
+# Inside monitoring interface:
+q  # Exit monitor
+k  # Kill all Claude instances (container keeps running)
+```
+
+#### tmux Session Management
+```bash
+# Inside container:
+tmux list-sessions           # List all sessions
+tmux kill-server            # Kill all tmux sessions
+tmux kill-session -t claude1 # Kill specific session
+```
+
+### Common Operations
+
+#### Complete Cleanup and Restart
+```bash
+# Stop and remove all related containers
+docker ps | grep claudecode | awk '{print $1}' | xargs docker stop
+docker ps -a | grep claudecode | awk '{print $1}' | xargs docker rm
+
+# Restart fresh
+./claude-in-docker --code
+```
+
+#### Quick Restart
+```bash
+# Stop current container
+docker stop claudecode-sandbox
+
+# Restart
+./claude-in-docker --code
+```
+
 ## Troubleshooting
 
 ### Docker Issues
