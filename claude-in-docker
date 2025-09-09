@@ -11,15 +11,23 @@ WORKDIR_IN_CONTAINER="/workspace"
 
 HOST_WORKDIR="${PWD}"
 
-# Consistent with install script: prefer project-local .sandbox (if exists)
+# Use localized configuration if exists, otherwise use image defaults
 if [[ -f ".sandbox/config/.claude.json" ]]; then
   CLAUDE_CFG_HOST="${HOST_WORKDIR}/.sandbox/config/.claude.json"
+  USE_HOST_CONFIG=1
+else
+  USE_HOST_CONFIG=0
+fi
+
+# Cache directories (always use host paths for persistence)
+if [[ -d ".sandbox" ]]; then
   MS_PW_CACHE_HOST="${HOST_WORKDIR}/.sandbox/ms-playwright"
   CLAUDE_CACHE_HOST="${HOST_WORKDIR}/.sandbox/cache-claude"
+  CLAUDE_CONFIG_HOST="${HOST_WORKDIR}/.sandbox/claude-config"
 else
-  CLAUDE_CFG_HOST="$HOME/.claude.json"
   MS_PW_CACHE_HOST="$HOME/.ms-playwright"
   CLAUDE_CACHE_HOST="$HOME/.cache/claude-code"
+  CLAUDE_CONFIG_HOST="$HOME/.claude"
 fi
 
 ENV_FILE_PATH="${HOST_WORKDIR}/.env"
@@ -42,11 +50,17 @@ RUN_ARGS=(docker run -it --rm
   --name "${CONTAINER_NAME}"
   --shm-size=2g
   -v "${HOST_WORKDIR}:${WORKDIR_IN_CONTAINER}"
-  -v "${CLAUDE_CFG_HOST}:/home/dev/.claude.json"
   -v "${MS_PW_CACHE_HOST}:/ms-playwright"
   -v "${CLAUDE_CACHE_HOST}:/home/dev/.cache/claude-code"
+  -v "${CLAUDE_CONFIG_HOST}:/home/dev/.claude"
   -w "${WORKDIR_IN_CONTAINER}"
 )
+
+# Only mount host config if using localized configuration
+if [[ "${USE_HOST_CONFIG}" -eq 1 ]]; then
+  RUN_ARGS+=(-v "${CLAUDE_CFG_HOST}:/home/dev/.claude.json")
+fi
+
 if [[ "${USE_ENV_FILE}" = "1" ]]; then
   RUN_ARGS+=( --env-file "${ENV_FILE_PATH}" )
 fi
